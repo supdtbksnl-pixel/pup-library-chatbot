@@ -12,7 +12,7 @@ from datetime import timedelta
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 
-# Session expires quickly so chat disappears when chatbot closes
+# Session expires so chat disappears when chatbot closes
 app.permanent_session_lifetime = timedelta(minutes=5)
 
 # -----------------------------------
@@ -86,7 +86,6 @@ def retrieve_relevant_doc(query):
 
     return knowledge_base[best_index], best_score
 
-
 # -----------------------------------
 # FORM
 # -----------------------------------
@@ -94,7 +93,6 @@ def retrieve_relevant_doc(query):
 class Form(FlaskForm):
     text = StringField("", validators=[DataRequired()])
     submit = SubmitField("Send")
-
 
 # -----------------------------------
 # ROUTE
@@ -150,7 +148,7 @@ def home():
             else:
                 assistant_reply = (
                     "To search for books available in the University Library, "
-                    "please use the Web OPAC (Online Public Access Catalogue).\n\n"
+                    "please use the Web OPAC.\n\n"
                     "Search here: http://10.10.85.51/"
                 )
 
@@ -171,58 +169,60 @@ def home():
 
                 if score >= 0.40:
 
-                    response_type = best_doc.get("response_type", "direct")
-                    page_title = best_doc.get("title", "relevant page")
+                    context_text = best_doc["content"]
 
-                    if response_type == "redirect":
+                    if session["language"] == "pa":
 
-                        if session["language"] == "pa":
-                            assistant_reply = f"ਕਿਰਪਾ ਕਰਕੇ {page_title} ਪੇਜ ਵੇਖੋ।"
-                        else:
-                            assistant_reply = f"Please visit the {page_title} page."
-
-                    else:
-
-                        context_text = best_doc["content"]
-
-                        if session["language"] == "pa":
-
-                            system_prompt = f"""
+                        system_prompt = f"""
 ਤੁਸੀਂ ਭਾਈ ਕਾਨ੍ਹ ਸਿੰਘ ਨਾਭਾ ਲਾਇਬ੍ਰੇਰੀ ਦੇ ਸਰਕਾਰੀ AI ਸਹਾਇਕ ਹੋ।
 
 ਹੇਠਾਂ ਦਿੱਤੀ ਜਾਣਕਾਰੀ ਅਧਿਕਾਰਕ ਹੈ:
 
 {context_text}
 
-ਉਪਭੋਗਤਾ ਦੇ ਸਵਾਲ ਦਾ ਜਵਾਬ ਸਿਰਫ ਪੰਜਾਬੀ ਭਾਸ਼ਾ ਵਿੱਚ ਦਿਓ।
-ਅੰਗਰੇਜ਼ੀ ਦੀ ਵਰਤੋਂ ਨਾ ਕਰੋ।
+ਉਪਭੋਗਤਾ ਦੇ ਸਵਾਲ ਦਾ ਜਵਾਬ ਪੰਜਾਬੀ ਭਾਸ਼ਾ ਵਿੱਚ ਦਿਓ।
 
 3-4 ਵਾਕਾਂ ਵਿੱਚ ਸਪਸ਼ਟ ਜਵਾਬ ਦਿਓ।
 """
 
-                        else:
+                    else:
 
-                            system_prompt = f"""
+                        system_prompt = f"""
 You are the official AI assistant of Bhai Kahn Singh Nabha Library.
 
 Use ONLY this official information:
 
 {context_text}
 
-Answer in 3–4 complete sentences in English.
+Answer in 3–4 complete sentences.
 """
 
-                        response = co.chat(
+                    response = co.chat(
+                        model="command-a-03-2025",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_input}
+                        ],
+                        max_tokens=200,
+                        temperature=0.2
+                    )
+
+                    assistant_reply = response.message.content[0].text.strip()
+
+                    # Force Punjabi translation if needed
+                    if session["language"] == "pa":
+
+                        translation = co.chat(
                             model="command-a-03-2025",
                             messages=[
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": user_input}
+                                {"role": "system", "content": "Translate the following text into Punjabi."},
+                                {"role": "user", "content": assistant_reply}
                             ],
                             max_tokens=200,
-                            temperature=0.2
+                            temperature=0.1
                         )
 
-                        assistant_reply = response.message.content[0].text
+                        assistant_reply = translation.message.content[0].text
 
                 else:
 
@@ -254,7 +254,6 @@ Answer in 3–4 complete sentences in English.
         chat_history=session.get("chat_history", []),
         language=session["language"]
     )
-
 
 # -----------------------------------
 # RUN
