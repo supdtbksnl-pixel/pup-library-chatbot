@@ -7,13 +7,9 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired
 import secrets
-from datetime import timedelta
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
-
-# Session expires so chat disappears when chatbot closes
-app.permanent_session_lifetime = timedelta(minutes=5)
 
 # -----------------------------------
 # LOAD API
@@ -38,22 +34,13 @@ with open("university_data.json", "r", encoding="utf-8") as f:
 
 texts = [entry["content"] for entry in knowledge_base]
 
-BATCH_SIZE = 90
-document_embeddings = []
+response = co.embed(
+    model="embed-english-v3.0",
+    input_type="search_document",
+    texts=texts
+)
 
-for i in range(0, len(texts), BATCH_SIZE):
-
-    batch = texts[i:i + BATCH_SIZE]
-
-    response = co.embed(
-        model="embed-english-v3.0",
-        input_type="search_document",
-        texts=batch
-    )
-
-    document_embeddings.extend(response.embeddings.float)
-
-document_embeddings = np.array(document_embeddings)
+document_embeddings = np.array(response.embeddings.float)
 
 # -----------------------------------
 # COSINE SIMILARITY
@@ -103,17 +90,15 @@ def home():
 
     form = Form()
 
-    session.permanent = False
+    # Reset chat automatically when chatbot opens
+    if request.args.get("reset") == "1":
+        session.pop("chat_history", None)
+        return redirect("/")
 
     if "language" not in session:
         session["language"] = "en"
 
-    # Clear chat manually
-    if request.args.get("clear") == "1":
-        session.pop("chat_history", None)
-        return redirect("/")
-
-    # Language switch clears previous chat
+    # Language switch clears chat
     if request.args.get("lang"):
         new_lang = request.args.get("lang")
 
@@ -135,33 +120,33 @@ def home():
         # BOOK SEARCH HANDLER
         # -----------------------------------
 
-        book_keywords = ["book", "books", "find book", "search book", "available books", "catalogue", "catalog"]
+        book_keywords = ["book", "books", "catalog", "catalogue"]
 
         if any(word in lower_input for word in book_keywords):
 
             if session["language"] == "pa":
                 assistant_reply = (
-                    "ਲਾਇਬ੍ਰੇਰੀ ਵਿੱਚ ਉਪਲਬਧ ਕਿਤਾਬਾਂ ਨੂੰ ਖੋਜਣ ਲਈ ਕਿਰਪਾ ਕਰਕੇ "
-                    "Web OPAC ਦੀ ਵਰਤੋਂ ਕਰੋ। ਤੁਸੀਂ title, author ਜਾਂ subject ਨਾਲ ਖੋਜ ਕਰ ਸਕਦੇ ਹੋ.\n\n"
-                    "Search here: http://10.10.85.51/"
+                    "ਕਿਤਾਬਾਂ ਖੋਜਣ ਲਈ Web OPAC ਵਰਤੋਂ ਕਰੋ। "
+                    "ਤੁਸੀਂ title, author ਜਾਂ subject ਨਾਲ ਖੋਜ ਕਰ ਸਕਦੇ ਹੋ.\n\n"
+                    "http://10.10.85.51/"
                 )
             else:
                 assistant_reply = (
-                    "To search for books available in the University Library, "
-                    "please use the Web OPAC.\n\n"
-                    "Search here: http://10.10.85.51/"
+                    "To search for books available in the library, "
+                    "please use Web OPAC.\n\n"
+                    "http://10.10.85.51/"
                 )
 
         else:
 
-            greetings = ["hi", "hello", "hlo", "hey"]
+            greetings = ["hi", "hello", "hey", "hlo"]
 
             if lower_input in greetings:
 
                 if session["language"] == "pa":
                     assistant_reply = "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਭਾਈ ਕਾਨ੍ਹ ਸਿੰਘ ਨਾਭਾ ਲਾਇਬ੍ਰੇਰੀ ਦਾ AI ਸਹਾਇਕ ਹਾਂ। ਮੈਂ ਤੁਹਾਡੀ ਕਿਵੇਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ?"
                 else:
-                    assistant_reply = "Hello! I am the AI assistant of Bhai Kahn Singh Nabha Library. How can I assist you today?"
+                    assistant_reply = "Hello! I am the AI assistant of Bhai Kahn Singh Nabha Library. How can I assist you?"
 
             else:
 
@@ -174,14 +159,13 @@ def home():
                     if session["language"] == "pa":
 
                         system_prompt = f"""
-ਤੁਸੀਂ ਭਾਈ ਕਾਨ੍ਹ ਸਿੰਘ ਨਾਭਾ ਲਾਇਬ੍ਰੇਰੀ ਦੇ ਸਰਕਾਰੀ AI ਸਹਾਇਕ ਹੋ।
+ਤੁਸੀਂ ਭਾਈ ਕਾਨ੍ਹ ਸਿੰਘ ਨਾਭਾ ਲਾਇਬ੍ਰੇਰੀ ਦੇ AI ਸਹਾਇਕ ਹੋ।
 
 ਹੇਠਾਂ ਦਿੱਤੀ ਜਾਣਕਾਰੀ ਅਧਿਕਾਰਕ ਹੈ:
 
 {context_text}
 
-ਉਪਭੋਗਤਾ ਦੇ ਸਵਾਲ ਦਾ ਜਵਾਬ ਪੰਜਾਬੀ ਭਾਸ਼ਾ ਵਿੱਚ ਦਿਓ।
-
+ਉਪਭੋਗਤਾ ਦੇ ਸਵਾਲ ਦਾ ਜਵਾਬ ਸਿਰਫ ਪੰਜਾਬੀ ਵਿੱਚ ਦਿਓ।
 3-4 ਵਾਕਾਂ ਵਿੱਚ ਸਪਸ਼ਟ ਜਵਾਬ ਦਿਓ।
 """
 
@@ -194,7 +178,7 @@ Use ONLY this official information:
 
 {context_text}
 
-Answer in 3–4 complete sentences.
+Answer clearly in 3-4 sentences.
 """
 
                     response = co.chat(
@@ -209,27 +193,12 @@ Answer in 3–4 complete sentences.
 
                     assistant_reply = response.message.content[0].text.strip()
 
-                    # Force Punjabi translation if needed
-                    if session["language"] == "pa":
-
-                        translation = co.chat(
-                            model="command-a-03-2025",
-                            messages=[
-                                {"role": "system", "content": "Translate the following text into Punjabi."},
-                                {"role": "user", "content": assistant_reply}
-                            ],
-                            max_tokens=200,
-                            temperature=0.1
-                        )
-
-                        assistant_reply = translation.message.content[0].text
-
                 else:
 
                     if session["language"] == "pa":
-                        assistant_reply = "ਮਾਫ ਕਰਨਾ, ਇਸ ਸਵਾਲ ਲਈ ਲਾਇਬ੍ਰੇਰੀ ਦੀ ਅਧਿਕਾਰਕ ਜਾਣਕਾਰੀ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।"
+                        assistant_reply = "ਮਾਫ ਕਰਨਾ, ਇਸ ਸਵਾਲ ਲਈ ਜਾਣਕਾਰੀ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।"
                     else:
-                        assistant_reply = "Sorry, official information for this query is not available."
+                        assistant_reply = "Sorry, information for this query is not available."
 
         # -----------------------------------
         # STORE CHAT
