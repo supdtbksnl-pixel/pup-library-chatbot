@@ -1,6 +1,7 @@
 import os
 import json
 import numpy as np
+import faiss
 import cohere
 from flask import Flask, render_template, request, session, redirect
 from flask_wtf import FlaskForm
@@ -8,17 +9,18 @@ from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired
 import secrets
 
+# -----------------------------------
+# APP SETUP
+# -----------------------------------
+
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 
 # -----------------------------------
-# LOAD API
+# LOAD COHERE
 # -----------------------------------
 
 api_key = os.getenv("COHERE_API_KEY")
-if not api_key:
-    raise ValueError("COHERE_API_KEY not set.")
-
 co = cohere.ClientV2(api_key)
 
 # -----------------------------------
@@ -28,32 +30,29 @@ co = cohere.ClientV2(api_key)
 with open("university_data.json", "r", encoding="utf-8") as f:
     knowledge_base = json.load(f)
 
-# -----------------------------------
-# CREATE DOCUMENT EMBEDDINGS
-# -----------------------------------
-
-texts = [entry["content"] for entry in knowledge_base]
-
-response = co.embed(
-    model="embed-english-v3.0",
-    input_type="search_document",
-    texts=texts
-)
-
-document_embeddings = np.array(response.embeddings.float)
+embeddings = np.load("embeddings.npy")
+index = faiss.read_index("faiss_index.index")
 
 # -----------------------------------
-# COSINE SIMILARITY
+# CONFIG
 # -----------------------------------
 
-def cosine_similarity(a, b):
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+TOP_K = 3
+MEMORY_LENGTH = 4
 
 # -----------------------------------
-# RETRIEVAL FUNCTION
+# FORM
 # -----------------------------------
 
-def retrieve_relevant_doc(query):
+class ChatForm(FlaskForm):
+    text = StringField("", validators=[DataRequired()])
+    submit = SubmitField("Send")
+
+# -----------------------------------
+# VECTOR SEARCH
+# -----------------------------------
+
+def retrieve_docs(query):
 
     response = co.embed(
         model="embed-english-v3.0",
@@ -61,25 +60,49 @@ def retrieve_relevant_doc(query):
         texts=[query]
     )
 
-    query_embedding = np.array(response.embeddings.float[0])
+    query_embedding = np.array(response.embeddings.float)
 
-    similarities = [
-        cosine_similarity(query_embedding, doc_embedding)
-        for doc_embedding in document_embeddings
-    ]
+    distances, indices = index.search(query_embedding, TOP_K)
 
-    best_index = int(np.argmax(similarities))
-    best_score = similarities[best_index]
+    docs = [knowledge_base[i]["content"] for i in indices[0]]
 
-    return knowledge_base[best_index], best_score
+    return "\n".join(docs)
 
 # -----------------------------------
-# FORM
+# PROMPT BUILDER
 # -----------------------------------
 
-class Form(FlaskForm):
-    text = StringField("", validators=[DataRequired()])
-    submit = SubmitField("Send")
+def build_prompt(language, context):
+
+    if language == "pa":
+
+        return f"""
+ਤੁਸੀਂ ਭਾਈ ਕਾਨ੍ਹ ਸਿੰਘ ਨਾਭਾ ਲਾਇਬ੍ਰੇਰੀ ਦੇ ਸਰਕਾਰੀ AI ਸਹਾਇਕ ਹੋ।
+
+ਹੇਠਾਂ ਦਿੱਤੀ ਜਾਣਕਾਰੀ ਦੇ ਆਧਾਰ 'ਤੇ ਉਪਭੋਗਤਾ ਦੇ ਸਵਾਲ ਦਾ ਜਵਾਬ ਦਿਓ।
+
+ਜਾਣਕਾਰੀ:
+{context}
+
+ਨਿਯਮ:
+• ਸਿਰਫ ਪੰਜਾਬੀ ਵਿੱਚ ਜਵਾਬ ਦਿਓ
+• ਸਪਸ਼ਟ ਅਤੇ ਛੋਟਾ ਜਵਾਬ ਦਿਓ
+"""
+
+    else:
+
+        return f"""
+You are the official AI assistant of Bhai Kahn Singh Nabha Library.
+
+Use the information below to answer the user.
+
+Information:
+{context}
+
+Rules:
+• Answer clearly
+• Do not repeat instructions
+"""
 
 # -----------------------------------
 # ROUTE
@@ -88,21 +111,19 @@ class Form(FlaskForm):
 @app.route("/", methods=["GET", "POST"])
 def home():
 
-    form = Form()
+    form = ChatForm()
 
-    # Reset chat automatically when chatbot opens
-    if request.args.get("reset") == "1":
+    if request.args.get("reset"):
         session.pop("chat_history", None)
         return redirect("/")
 
     if "language" not in session:
         session["language"] = "en"
 
-    # Language switch clears chat
     if request.args.get("lang"):
         new_lang = request.args.get("lang")
 
-        if session.get("language") != new_lang:
+        if new_lang != session["language"]:
             session["language"] = new_lang
             session.pop("chat_history", None)
 
@@ -114,91 +135,46 @@ def home():
     if form.validate_on_submit():
 
         user_input = form.text.data.strip()
-        lower_input = user_input.lower()
 
         # -----------------------------------
-        # BOOK SEARCH HANDLER
+        # RETRIEVE KNOWLEDGE
         # -----------------------------------
 
-        book_keywords = ["book", "books", "catalog", "catalogue"]
+        context = retrieve_docs(user_input)
 
-        if any(word in lower_input for word in book_keywords):
+        # -----------------------------------
+        # MEMORY
+        # -----------------------------------
 
-            if session["language"] == "pa":
-                assistant_reply = (
-                    "ਕਿਤਾਬਾਂ ਖੋਜਣ ਲਈ Web OPAC ਵਰਤੋਂ ਕਰੋ। "
-                    "ਤੁਸੀਂ title, author ਜਾਂ subject ਨਾਲ ਖੋਜ ਕਰ ਸਕਦੇ ਹੋ.\n\n"
-                    "http://10.10.85.51/"
-                )
-            else:
-                assistant_reply = (
-                    "To search for books available in the library, "
-                    "please use Web OPAC.\n\n"
-                    "http://10.10.85.51/"
-                )
+        conversation_memory = session["chat_history"][-MEMORY_LENGTH:]
 
-        else:
+        messages = []
 
-            greetings = ["hi", "hello", "hey", "hlo"]
+        for msg in conversation_memory:
+            messages.append(msg)
 
-            if lower_input in greetings:
+        messages.append({
+            "role": "user",
+            "content": user_input
+        })
 
-                if session["language"] == "pa":
-                    assistant_reply = "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਭਾਈ ਕਾਨ੍ਹ ਸਿੰਘ ਨਾਭਾ ਲਾਇਬ੍ਰੇਰੀ ਦਾ AI ਸਹਾਇਕ ਹਾਂ। ਮੈਂ ਤੁਹਾਡੀ ਕਿਵੇਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ?"
-                else:
-                    assistant_reply = "Hello! I am the AI assistant of Bhai Kahn Singh Nabha Library. How can I assist you?"
+        # -----------------------------------
+        # BUILD PROMPT
+        # -----------------------------------
 
-            else:
+        system_prompt = build_prompt(session["language"], context)
 
-                best_doc, score = retrieve_relevant_doc(user_input)
+        response = co.chat(
+            model="command-a-03-2025",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                *messages
+            ],
+            temperature=0,
+            max_tokens=200
+        )
 
-                if score >= 0.40:
-
-                    context_text = best_doc["content"]
-
-                    if session["language"] == "pa":
-
-                        system_prompt = f"""
-ਤੁਸੀਂ ਭਾਈ ਕਾਨ੍ਹ ਸਿੰਘ ਨਾਭਾ ਲਾਇਬ੍ਰੇਰੀ ਦੇ AI ਸਹਾਇਕ ਹੋ।
-
-ਹੇਠਾਂ ਦਿੱਤੀ ਜਾਣਕਾਰੀ ਅਧਿਕਾਰਕ ਹੈ:
-
-{context_text}
-
-ਉਪਭੋਗਤਾ ਦੇ ਸਵਾਲ ਦਾ ਜਵਾਬ ਸਿਰਫ ਪੰਜਾਬੀ ਵਿੱਚ ਦਿਓ।
-3-4 ਵਾਕਾਂ ਵਿੱਚ ਸਪਸ਼ਟ ਜਵਾਬ ਦਿਓ।
-"""
-
-                    else:
-
-                        system_prompt = f"""
-You are the official AI assistant of Bhai Kahn Singh Nabha Library.
-
-Use ONLY this official information:
-
-{context_text}
-
-Answer clearly in 3-4 sentences.
-"""
-
-                    response = co.chat(
-                        model="command-a-03-2025",
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_input}
-                        ],
-                        max_tokens=200,
-                        temperature=0.2
-                    )
-
-                    assistant_reply = response.message.content[0].text.strip()
-
-                else:
-
-                    if session["language"] == "pa":
-                        assistant_reply = "ਮਾਫ ਕਰਨਾ, ਇਸ ਸਵਾਲ ਲਈ ਜਾਣਕਾਰੀ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।"
-                    else:
-                        assistant_reply = "Sorry, information for this query is not available."
+        answer = response.message.content[0].text.strip()
 
         # -----------------------------------
         # STORE CHAT
@@ -211,7 +187,7 @@ Answer clearly in 3-4 sentences.
 
         session["chat_history"].append({
             "role": "assistant",
-            "content": assistant_reply
+            "content": answer
         })
 
         session.modified = True
