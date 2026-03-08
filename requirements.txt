@@ -4,3 +4,4 @@ wtforms
 numpy
 cohere
 gunicorn
+faiss-cpu
