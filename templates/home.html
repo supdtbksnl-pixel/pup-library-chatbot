@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Library Assistant</title>
+
+<style>
+
+body{
+    margin:0;
+    font-family:Arial, sans-serif;
+    background:#f0f2f5;
+}
+
+/* FLOATING LAUNCHER */
+
+.chat-launcher{
+    position:fixed;
+    bottom:20px;
+    right:20px;
+    cursor:pointer;
+}
+
+.chat-launcher img{
+    width:60px;
+    height:60px;
+    border-radius:50%;
+    box-shadow:0 4px 12px rgba(0,0,0,0.3);
+}
+
+.chat-launcher .tooltip{
+    position:absolute;
+    right:70px;
+    bottom:20px;
+    background:#333;
+    color:white;
+    padding:6px 10px;
+    border-radius:6px;
+    font-size:12px;
+    opacity:0;
+    transition:0.3s;
+}
+
+.chat-launcher:hover .tooltip{
+    opacity:1;
+}
+
+/* CHAT WINDOW */
+
+.chat-wrapper{
+    position:fixed;
+    bottom:95px;
+    right:20px;
+    width:380px;
+    height:520px;
+    background:white;
+    border-radius:12px;
+    display:none;
+    flex-direction:column;
+    overflow:hidden;
+    box-shadow:0 6px 20px rgba(0,0,0,0.25);
+}
+
+/* HEADER */
+
+.chat-header{
+    background:linear-gradient(135deg,#141245,#1d1a5f);
+    color:white;
+    padding:12px 16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    position:relative;
+}
+
+.chat-header-left{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.chat-header img{
+    height:34px;
+}
+
+.chat-header h1{
+    font-size:16px;
+    margin:0;
+}
+
+.chat-header::after{
+    content:"";
+    position:absolute;
+    bottom:0;
+    left:0;
+    width:100%;
+    height:2px;
+    background:linear-gradient(to right,#f1c40f,#ffffff20);
+}
+
+/* LANGUAGE TOGGLE */
+
+.lang-toggle{
+    display:flex;
+    background:rgba(255,255,255,0.2);
+    border-radius:20px;
+    overflow:hidden;
+}
+
+.lang-toggle a{
+    padding:4px 10px;
+    font-size:12px;
+    text-decoration:none;
+    color:white;
+}
+
+.lang-toggle .active{
+    background:white;
+    color:#141245;
+    font-weight:bold;
+}
+
+.header-controls{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+/* CHAT BODY */
+
+.chat-container{
+    flex:1;
+    padding:12px;
+    overflow-y:auto;
+    background:#f7f7f7;
+}
+
+.message{
+    display:flex;
+    margin-bottom:10px;
+}
+
+.message.user{
+    justify-content:flex-end;
+}
+
+.avatar{
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    margin-right:6px;
+}
+
+.bubble{
+    max-width:70%;
+    padding:8px 12px;
+    border-radius:16px;
+    font-size:13px;
+}
+
+.assistant .bubble{
+    background:#141245;
+    color:white;
+}
+
+.user .bubble{
+    background:#f5f6cb;
+}
+
+/* INPUT AREA */
+
+.input-area{
+    display:flex;
+    align-items:center;
+    padding:8px;
+    border-top:1px solid #141245;
+    background:white;
+}
+
+/* TEXT INPUT */
+
+.input-area input[type="text"]{
+    flex:1;
+    padding:8px 12px;
+    border-radius:20px;
+    border:1px solid #ccc;
+    background:#eeeeee;
+    font-size:13px;
+    outline:none;
+}
+
+/* SEND BUTTON */
+
+.send-btn{
+    margin-left:6px;
+    padding:6px 12px;
+    border-radius:14px;
+    border:none;
+    background:#1e5eff;
+    color:white;
+    font-size:12px;
+    cursor:pointer;
+}
+
+.send-btn:hover{
+    background:#1748c7;
+}
+
+/* VOICE BUTTON */
+
+.voice-btn{
+    width:34px;
+    height:34px;
+    border-radius:50%;
+    border:none;
+    background:#d9d9d9;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    margin-left:6px;
+}
+
+.voice-btn img{
+    width:16px;
+}
+
+.voice-btn:hover{
+    background:#cfcfcf;
+}
+
+/* MOBILE */
+
+@media(max-width:480px){
+.chat-wrapper{
+    width:100%;
+    right:0;
+    bottom:0;
+    height:100vh;
+    border-radius:0;
+}
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="chat-launcher" onclick="toggleChat()">
+<img src="{{ url_for('static', filename='images/for_header.png') }}">
+<span class="tooltip">Assistant</span>
+</div>
+
+<div class="chat-wrapper" id="chatBox">
+
+<div class="chat-header">
+
+<div class="chat-header-left">
+<img src="{{ url_for('static', filename='images/for_header.png') }}">
+<h1>Library Assistant</h1>
+</div>
+
+<div class="header-controls">
+
+<div class="lang-toggle">
+<a href="?lang=en" class="{{ 'active' if language=='en' else '' }}">EN</a>
+<a href="?lang=pa" class="{{ 'active' if language=='pa' else '' }}">ਪੰਜਾਬੀ</a>
+</div>
+
+<a href="?clear=1">🗑</a>
+<span onclick="toggleChat()">✕</span>
+
+</div>
+</div>
+
+<div class="chat-container" id="messages">
+
+{% for message in chat_history %}
+
+<div class="message {{ message.role }}">
+
+{% if message.role == "assistant" %}
+<img class="avatar" src="{{ url_for('static', filename='images/for_header.png') }}">
+{% endif %}
+
+<div class="bubble">{{ message.content }}</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+<form method="POST" class="input-area">
+
+{{ form.hidden_tag() }}
+
+{{ form.text(placeholder="Type message...", id="userInput") }}
+
+<button type="button" class="voice-btn" onclick="startVoice()">
+<img src="{{ url_for('static', filename='images/mic.svg') }}">
+</button>
+
+<button type="submit" class="send-btn">Send</button>
+
+</form>
+
+</div>
+
+<script>
+
+/* OPEN / CLOSE CHAT */
+
+function toggleChat(forceOpen=false){
+const box=document.getElementById("chatBox");
+
+if(forceOpen){
+box.style.display="flex";
+localStorage.setItem("chatOpen","1");
+return;
+}
+
+if(box.style.display==="flex"){
+box.style.display="none";
+localStorage.setItem("chatOpen","0");
+}else{
+box.style.display="flex";
+localStorage.setItem("chatOpen","1");
+}
+}
+
+/* REMEMBER CHAT STATE */
+
+window.onload=function(){
+
+if(localStorage.getItem("chatOpen")==="1"){
+toggleChat(true);
+}
+
+autoScroll();
+
+};
+
+/* AUTO SCROLL */
+
+function autoScroll(){
+const chat=document.getElementById("messages");
+chat.scrollTop=chat.scrollHeight;
+}
+
+/* VOICE INPUT */
+
+function startVoice(){
+
+const SpeechRecognition=
+window.SpeechRecognition||
+window.webkitSpeechRecognition;
+
+if(!SpeechRecognition){
+alert("Speech recognition not supported");
+return;
+}
+
+const recognition=new SpeechRecognition();
+
+recognition.lang="{{ 'pa-IN' if language=='pa' else 'en-US' }}";
+recognition.interimResults=false;
+
+recognition.start();
+
+recognition.onresult=function(event){
+document.getElementById("userInput").value=
+event.results[0][0].transcript;
+};
+
+}
+
+</script>
+
+</body>
+</html>

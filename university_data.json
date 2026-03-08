@@ -1,0 +1,203 @@
+[
+  {
+  "id": "timings_001",
+  "category": "information",
+  "title": "Library Working Days and Hours",
+  "content": "The University Library operates daily from 7:00 AM until 5:00 AM the following morning on regular working days. It remains closed on Republic Day, Holi, Diwali, Independence Day, and Guru Nanak Dev Ji’s Birthday. On Dussehra, the library closes at 2:30 PM, and on Lohri, it closes at 5:00 PM.",
+  "keywords": [
+    "library timing",
+    "library timings",
+    "library hours",
+    "library opening time",
+    "library closing time",
+    "when does library open",
+    "when does library close",
+    "library open today",
+    "is library open",
+    "library schedule"
+  ],
+  "response_type": "direct",
+  "priority": 100
+},
+{
+  "id": "books_available_001",
+  "category": "book_search",
+  "title": "Search Books in Library Collection",
+  "content": "To search for specific books available in the University Library, please use the Web OPAC (Online Public Access Catalogue). You can search by title, author, subject, or keyword to check book availability in the library collection.",
+  "redirect_url": "http://10.10.85.51/",
+  "keywords": [
+    "available books",
+    "books in library",
+    "find book",
+    "search book",
+    "library books",
+    "check book availability",
+    "is this book in library",
+    "book catalogue",
+    "library catalogue",
+    "search books in library",
+    "library book search"
+  ],
+  "response_type": "redirect_with_summary"
+},
+
+  {
+    "id": "contact_001",
+    "category": "contact_information",
+    "title": "Library Contact Details",
+    "content": "For official communication, please visit the Contact Us page where the official phone numbers and email details of the University Library are provided.",
+    "redirect_url": "contact.html",
+    "keywords": [
+      "contact",
+      "phone number",
+      "email",
+      "how to contact library",
+      "library contact details"
+    ],
+    "response_type": "redirect_with_summary"
+  },
+
+  {
+    "id": "opac_001",
+    "category": "book_search",
+    "title": "Search Books in Library",
+    "content": "To search for specific books available in the library collection, please use the Online Public Access Catalogue (OPAC).",
+    "redirect_url": "http://10.10.85.51/",
+    "keywords": [
+      "find book",
+      "search book",
+      "book availability",
+      "is this book available",
+      "check book in library"
+    ],
+    "response_type": "redirect"
+  },
+
+  {
+    "id": "ebooks_001",
+    "category": "ebooks",
+    "title": "Free eBooks",
+    "content": "The library provides access to free and subscribed eBook platforms such as Project Gutenberg, Open Library, ManyBooks, Feedbooks and other academic resources. You can explore them on the eBooks page.",
+    "redirect_url": "ebook.html",
+    "keywords": [
+      "ebooks",
+      "free ebooks",
+      "digital books",
+      "online books"
+    ],
+    "response_type": "redirect_with_summary"
+  },
+
+  {
+    "id": "ejournals_001",
+    "category": "ejournals",
+    "title": "eJournal Access",
+    "content": "The library provides access to national and international peer-reviewed eJournals across economics, mathematics, science, humanities, and interdisciplinary research. You can explore them on the eJournals page.",
+    "redirect_url": "ejournals.html",
+    "keywords": [
+      "journals",
+      "research journals",
+      "online journals",
+      "ejournal access"
+    ],
+    "response_type": "redirect_with_summary"
+  },
+  {
+  "id": "subject_book_search_001",
+  "category": "book_search",
+  "title": "Search Subject Books in Library",
+  "content": "To find books on a specific subject available in the University Library, please use the Web OPAC (Online Public Access Catalogue). You can search by subject, title, or author to check book availability in the library collection.",
+  "redirect_url": "http://10.10.85.51/",
+  "keywords": [
+    "books of economics",
+    "economics books",
+    "books on economics",
+    "economics books in library",
+    "books on subject",
+    "subject books",
+    "find subject books",
+    "books available in library",
+    "available books in library",
+    "library catalogue",
+    "search books in library"
+  ],
+  "response_type": "redirect_with_summary"
+},
+
+  {
+    "id": "services_001",
+    "category": "services",
+    "title": "Library Services & Facilities",
+    "content": "The University Library provides circulation services, reference assistance, reading facilities, digital access, research support, and specialized academic services for students, faculty members, and research scholars. For detailed information, please visit the Services page.",
+    "redirect_url": "services.html",
+    "keywords": [
+      "library services",
+      "facilities",
+      "what services",
+      "library support"
+    ],
+    "response_type": "redirect_with_summary"
+  },
+
+  {
+    "id": "orientation_001",
+    "category": "orientation",
+    "title": "Library Tour & Orientation",
+    "content": "New users can explore the Library Tour and Orientation page to understand different sections, facilities, services, and academic resources available in the library.",
+    "redirect_url": "tour.html",
+    "keywords": [
+      "library tour",
+      "orientation",
+      "new student help",
+      "how to use library"
+    ],
+    "response_type": "redirect_with_summary"
+  },
+
+  {
+    "id": "notices_001",
+    "category": "notices",
+    "title": "Latest Notices",
+    "content": "For the latest official announcements and updates, please visit the Notices page.",
+    "redirect_url": "notice-details.html",
+    "keywords": [
+      "latest notice",
+      "new notice",
+      "announcement",
+      "recent update"
+    ],
+    "response_type": "redirect_only"
+  },
+
+  {
+    "id": "gallery_001",
+    "category": "events_gallery",
+    "title": "Library Events & Gallery",
+    "content": "The Gallery page showcases events, activities, seminars, workshops, and important occasions held in the University Library.",
+    "redirect_url": "gallery.html",
+    "keywords": [
+      "library events",
+      "photos",
+      "gallery",
+      "occasions",
+      "seminars",
+      "workshops"
+    ],
+    "response_type": "redirect"
+  },
+
+  {
+    "id": "dr_ganda_singh_001",
+    "category": "special_reference_library",
+    "title": "Dr. Ganda Singh Punjabi Reference Library",
+    "content": "Dr. Ganda Singh Punjabi Reference Library specializes in Punjab History, Punjabi Literature, Sikh Studies, and rare historical collections including manuscripts, newspapers, and archival materials. For detailed information, please visit its dedicated page.",
+    "redirect_url": "dr.gandasinghlibrary.html",
+    "keywords": [
+      "ganda singh library",
+      "punjabi reference library",
+      "punjab history collection",
+      "sikh studies"
+    ],
+    "response_type": "redirect_with_summary"
+  }
+]
