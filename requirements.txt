@@ -3,5 +3,5 @@ flask-wtf
 wtforms
 numpy
 cohere
-gunicorn
 faiss-cpu
+gunicorn
