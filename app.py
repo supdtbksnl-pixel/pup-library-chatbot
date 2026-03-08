@@ -7,9 +7,13 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField
 from wtforms.validators import DataRequired
 import secrets
+from datetime import timedelta
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
+
+# Session expires quickly so chat disappears when chatbot closes
+app.permanent_session_lifetime = timedelta(minutes=5)
 
 # -----------------------------------
 # LOAD API
@@ -29,7 +33,7 @@ with open("university_data.json", "r", encoding="utf-8") as f:
     knowledge_base = json.load(f)
 
 # -----------------------------------
-# CREATE DOCUMENT EMBEDDINGS (ONCE)
+# CREATE DOCUMENT EMBEDDINGS
 # -----------------------------------
 
 texts = [entry["content"] for entry in knowledge_base]
@@ -101,15 +105,24 @@ def home():
 
     form = Form()
 
+    session.permanent = False
+
     if "language" not in session:
         session["language"] = "en"
 
+    # Clear chat manually
     if request.args.get("clear") == "1":
         session.pop("chat_history", None)
         return redirect("/")
 
+    # Language switch clears previous chat
     if request.args.get("lang"):
-        session["language"] = request.args.get("lang")
+        new_lang = request.args.get("lang")
+
+        if session.get("language") != new_lang:
+            session["language"] = new_lang
+            session.pop("chat_history", None)
+
         return redirect("/")
 
     if "chat_history" not in session:
@@ -121,7 +134,7 @@ def home():
         lower_input = user_input.lower()
 
         # -----------------------------------
-        # BOOK SEARCH HANDLER (NEW RULE)
+        # BOOK SEARCH HANDLER
         # -----------------------------------
 
         book_keywords = ["book", "books", "find book", "search book", "available books", "catalogue", "catalog"]
@@ -131,23 +144,17 @@ def home():
             if session["language"] == "pa":
                 assistant_reply = (
                     "ਲਾਇਬ੍ਰੇਰੀ ਵਿੱਚ ਉਪਲਬਧ ਕਿਤਾਬਾਂ ਨੂੰ ਖੋਜਣ ਲਈ ਕਿਰਪਾ ਕਰਕੇ "
-                    "Web OPAC (Online Public Access Catalogue) ਦੀ ਵਰਤੋਂ ਕਰੋ। "
-                    "ਤੁਸੀਂ title, author ਜਾਂ subject ਨਾਲ ਖੋਜ ਕਰ ਸਕਦੇ ਹੋ।\n\n"
+                    "Web OPAC ਦੀ ਵਰਤੋਂ ਕਰੋ। ਤੁਸੀਂ title, author ਜਾਂ subject ਨਾਲ ਖੋਜ ਕਰ ਸਕਦੇ ਹੋ.\n\n"
                     "Search here: http://10.10.85.51/"
                 )
             else:
                 assistant_reply = (
                     "To search for books available in the University Library, "
-                    "please use the Web OPAC (Online Public Access Catalogue). "
-                    "You can search by title, author, or subject.\n\n"
+                    "please use the Web OPAC (Online Public Access Catalogue).\n\n"
                     "Search here: http://10.10.85.51/"
                 )
 
         else:
-
-            # -----------------------------------
-            # GREETING HANDLER
-            # -----------------------------------
 
             greetings = ["hi", "hello", "hlo", "hey"]
 
@@ -162,30 +169,12 @@ def home():
 
                 best_doc, score = retrieve_relevant_doc(user_input)
 
-                # -----------------------------------
-                # HIGH CONFIDENCE → UNIVERSITY DATA
-                # -----------------------------------
-
                 if score >= 0.40:
 
                     response_type = best_doc.get("response_type", "direct")
                     page_title = best_doc.get("title", "relevant page")
 
-                    if response_type == "redirect_only":
-
-                        if session["language"] == "pa":
-                            assistant_reply = f"{best_doc['content']} ਕਿਰਪਾ ਕਰਕੇ {page_title} ਪੇਜ ਵੇਖੋ।"
-                        else:
-                            assistant_reply = f"{best_doc['content']} Please visit the {page_title} page."
-
-                    elif response_type == "redirect_with_summary":
-
-                        if session["language"] == "pa":
-                            assistant_reply = f"{best_doc['content']} ਵਧੇਰੇ ਜਾਣਕਾਰੀ ਲਈ ਕਿਰਪਾ ਕਰਕੇ {page_title} ਪੇਜ ਵੇਖੋ।"
-                        else:
-                            assistant_reply = f"{best_doc['content']} For more details, please visit the {page_title} page."
-
-                    elif response_type == "redirect":
+                    if response_type == "redirect":
 
                         if session["language"] == "pa":
                             assistant_reply = f"ਕਿਰਪਾ ਕਰਕੇ {page_title} ਪੇਜ ਵੇਖੋ।"
@@ -197,6 +186,7 @@ def home():
                         context_text = best_doc["content"]
 
                         if session["language"] == "pa":
+
                             system_prompt = f"""
 ਤੁਸੀਂ ਭਾਈ ਕਾਨ੍ਹ ਸਿੰਘ ਨਾਭਾ ਲਾਇਬ੍ਰੇਰੀ ਦੇ ਸਰਕਾਰੀ AI ਸਹਾਇਕ ਹੋ।
 
@@ -204,9 +194,14 @@ def home():
 
 {context_text}
 
-ਸਿਰਫ ਇਸ ਜਾਣਕਾਰੀ ਦੇ ਆਧਾਰ 'ਤੇ 3-4 ਵਾਕਾਂ ਵਿੱਚ ਜਵਾਬ ਦਿਓ।
+ਉਪਭੋਗਤਾ ਦੇ ਸਵਾਲ ਦਾ ਜਵਾਬ ਸਿਰਫ ਪੰਜਾਬੀ ਭਾਸ਼ਾ ਵਿੱਚ ਦਿਓ।
+ਅੰਗਰੇਜ਼ੀ ਦੀ ਵਰਤੋਂ ਨਾ ਕਰੋ।
+
+3-4 ਵਾਕਾਂ ਵਿੱਚ ਸਪਸ਼ਟ ਜਵਾਬ ਦਿਓ।
 """
+
                         else:
+
                             system_prompt = f"""
 You are the official AI assistant of Bhai Kahn Singh Nabha Library.
 
@@ -214,7 +209,7 @@ Use ONLY this official information:
 
 {context_text}
 
-Answer in 3-4 complete sentences.
+Answer in 3–4 complete sentences in English.
 """
 
                         response = co.chat(
@@ -231,17 +226,10 @@ Answer in 3-4 complete sentences.
 
                 else:
 
-                    general_response = co.chat(
-                        model="command-a-03-2025",
-                        messages=[
-                            {"role": "system", "content": "You are a helpful academic assistant."},
-                            {"role": "user", "content": user_input}
-                        ],
-                        max_tokens=300,
-                        temperature=0.4
-                    )
-
-                    assistant_reply = general_response.message.content[0].text
+                    if session["language"] == "pa":
+                        assistant_reply = "ਮਾਫ ਕਰਨਾ, ਇਸ ਸਵਾਲ ਲਈ ਲਾਇਬ੍ਰੇਰੀ ਦੀ ਅਧਿਕਾਰਕ ਜਾਣਕਾਰੀ ਉਪਲਬਧ ਨਹੀਂ ਹੈ।"
+                    else:
+                        assistant_reply = "Sorry, official information for this query is not available."
 
         # -----------------------------------
         # STORE CHAT
